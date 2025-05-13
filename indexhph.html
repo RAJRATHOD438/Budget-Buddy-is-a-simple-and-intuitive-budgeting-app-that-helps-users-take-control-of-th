@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Personal Finance Tracker</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px; }
+    .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px #ccc; }
+    h1, h2 { text-align: center; }
+    input, select, button { width: 100%; margin: 5px 0; padding: 10px; border-radius: 4px; border: 1px solid #ccc; }
+    button { background: #007bff; color: white; border: none; cursor: pointer; }
+    button:hover { background: #0056b3; }
+    .summary { display: flex; flex-wrap: wrap; justify-content: space-between; margin-top: 20px; }
+    .summary div { flex: 1 1 45%; margin: 5px; padding: 10px; border-radius: 5px; text-align: center; font-weight: bold; }
+    .income { background-color: #d4fcd4; }
+    .expense { background-color: #fcd4d4; }
+    .investment { background-color: #d4e4fc; }
+    .balance { background-color: #fff3cd; }
+    ul { list-style-type: none; padding: 0; margin-top: 20px; }
+    li { padding: 10px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; }
+    .date { font-size: 0.85em; color: #666; }
+    .delete-btn { background: red; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+    canvas { margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🏦 Personal Finance Tracker</h1>
+
+    <select id="type">
+      <option value="income">Income</option>
+      <option value="expense">Expense</option>
+      <option value="investment">Investment</option>
+    </select>
+    <input type="text" id="category" placeholder="Category (e.g. Salary, Rent, Stocks)" />
+    <input type="number" id="amount" placeholder="Amount" />
+    <button onclick="addTransaction()">Add Transaction</button>
+
+    <div class="summary">
+      <div class="income">Income: $<span id="income">0.00</span></div>
+      <div class="expense">Expense: $<span id="expense">0.00</span></div>
+      <div class="investment">Investment: $<span id="investment">0.00</span></div>
+      <div class="balance">Balance: $<span id="balance">0.00</span></div>
+    </div>
+
+    <h2>📋 Transaction History</h2>
+    <ul id="transactionList"></ul>
+
+    <h2>📊 Charts</h2>
+    <canvas id="pieChart" height="200"></canvas>
+    <canvas id="lineChart" height="200"></canvas>
+  </div>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script>
+    let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
+    let pieChart, lineChart;
+
+    function saveTransactions() {
+      localStorage.setItem('transactions', JSON.stringify(transactions));
+    }
+
+    function addTransaction() {
+      const type = document.getElementById('type').value;
+      const category = document.getElementById('category').value.trim();
+      const amount = parseFloat(document.getElementById('amount').value);
+
+      if (!category || isNaN(amount) || amount <= 0) {
+        alert("Please enter a valid category and amount.");
+        return;
+      }
+
+      const newTransaction = {
+        id: Date.now(),
+        type,
+        category,
+        amount,
+        date: new Date().toISOString()
+      };
+
+      transactions.unshift(newTransaction);
+      saveTransactions();
+      updateUI();
+
+      document.getElementById('category').value = '';
+      document.getElementById('amount').value = '';
+    }
+
+    function deleteTransaction(id) {
+      transactions = transactions.filter(t => t.id !== id);
+      saveTransactions();
+      updateUI();
+    }
+
+    function updateUI() {
+      let income = 0, expense = 0, investment = 0;
+      const list = document.getElementById('transactionList');
+      list.innerHTML = '';
+
+      transactions.forEach(t => {
+        if (t.type === 'income') income += t.amount;
+        else if (t.type === 'expense') expense += t.amount;
+        else if (t.type === 'investment') investment += t.amount;
+
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <div>
+            <strong>${t.category}</strong> (${t.type})<br />
+            <span class="date">${new Date(t.date).toLocaleString()}</span>
+          </div>
+          <div>
+            $${t.amount.toFixed(2)} <br />
+            <button class="delete-btn" onclick="deleteTransaction(${t.id})">X</button>
+          </div>
+        `;
+        list.appendChild(li);
+      });
+
+      const balance = income - expense;
+      document.getElementById('income').textContent = income.toFixed(2);
+      document.getElementById('expense').textContent = expense.toFixed(2);
+      document.getElementById('investment').textContent = investment.toFixed(2);
+      document.getElementById('balance').textContent = balance.toFixed(2);
+
+      drawCharts(income, expense, investment);
+    }
+
+    function drawCharts(income, expense, investment) {
+      if (pieChart) pieChart.destroy();
+      if (lineChart) lineChart.destroy();
+
+      const pieCtx = document.getElementById('pieChart').getContext('2d');
+      pieChart = new Chart(pieCtx, {
+        type: 'pie',
+        data: {
+          labels: ['Income', 'Expense', 'Investment'],
+          datasets: [{
+            label: 'Summary',
+            data: [income, expense, investment],
+            backgroundColor: ['#4caf50', '#f44336', '#2196f3']
+          }]
+        }
+      });
+
+      const sorted = [...transactions].reverse();
+      const lineCtx = document.getElementById('lineChart').getContext('2d');
+      lineChart = new Chart(lineCtx, {
+        type: 'line',
+        data: {
+          labels: sorted.map(t => new Date(t.date).toLocaleDateString()),
+          datasets: [{
+            label: 'Transaction Amounts',
+            data: sorted.map(t => t.type === 'expense' ? -t.amount : t.amount),
+            borderColor: '#3f51b5',
+            fill: false,
+            tension: 0.3
+          }]
+        }
+      });
+    }
+
+    updateUI(); // initial render
+  </script>
+</body>
+</html>
